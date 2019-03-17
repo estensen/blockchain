@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -26,6 +27,8 @@ type Message struct {
 	BPM int
 }
 
+var mutex = &sync.Mutex{}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -36,7 +39,10 @@ func main() {
 		t := time.Now()
 		genesisBlock := Block{0, t.String(), 0, "", ""}
 		spew.Dump(genesisBlock)
+
+		mutex.Lock()
 		Blockchain = append(Blockchain, genesisBlock)
+		mutex.Unlock()
 	}()
 	log.Fatal(run())
 
@@ -62,19 +68,19 @@ func handleGetBlockchain(c *gin.Context) {
 }
 
 func handleWriteBlock(c *gin.Context) {
-	var m Message
-	c.BindJSON(&m)
+	var msg Message
+	c.BindJSON(&msg)
 
-	newBlock, err := generateBlock(Blockchain[len(Blockchain)-1], m.BPM)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, newBlock)
-		return
-	}
-	if isBlockValid(newBlock, Blockchain[len(Blockchain)-1]) {
+	mutex.Lock()
+	prevBlock := Blockchain[len(Blockchain)-1]
+	newBlock := generateBlock(prevBlock, msg.BPM)
+
+	if isBlockValid(newBlock, prevBlock) {
 		newBlockchain := append(Blockchain, newBlock)
 		replaceChain(newBlockchain)
 		spew.Dump(Blockchain)
 	}
+	mutex.Unlock()
 
 	c.JSON(http.StatusOK, newBlock)
 }
@@ -87,7 +93,7 @@ func calculateHash(block Block) string {
 	return hex.EncodeToString(hashed)
 }
 
-func generateBlock(oldBlock Block, BPM int) (Block, error) {
+func generateBlock(oldBlock Block, BPM int) Block {
 	var newBlock Block
 	t := time.Now()
 
@@ -97,7 +103,7 @@ func generateBlock(oldBlock Block, BPM int) (Block, error) {
 	newBlock.PrevHash = oldBlock.Hash
 	newBlock.Hash = calculateHash(newBlock)
 
-	return newBlock, nil
+	return newBlock
 }
 
 func isBlockValid(newBlock, oldBlock Block) bool {
