@@ -8,11 +8,6 @@ $ go run main.go
 
 ### Add block
 ```sh
-$ curl -d '{"BPM": 50}' -H "Content-Type: application/json" -X POST http://localhost:8080
+$ nc localhost 8080
+Enter a new BPM:
 ```
-
-### Get blockchain
-```sh
-$ curl http://localhost:8080
-```
- 
