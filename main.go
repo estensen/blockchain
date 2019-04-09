@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/ipfs/go-ipfs-api"
@@ -74,26 +73,33 @@ func setupRouter() *gin.Engine {
 	r := gin.Default()
 	r.GET("/", handleGetBlockchain)
 	r.POST("/", handleWriteBlock)
+	r.GET("/block/:cid", handleGetBlockData)
 	return r
 }
 
 func handleGetBlockchain(c *gin.Context) {
-	path := Blockchain[len(Blockchain)-1].IPFSHash
-	fmt.Println(path)
-	r, err := sh.Cat(path)
-	if err != nil {
-		log.Fatal("Could not retrieve IPFS object")
-	}
+	c.JSON(http.StatusOK, Blockchain)
+}
 
+func handleGetBlockData(c *gin.Context) {
+	cid := c.Params.ByName("cid")
+
+	r, err := sh.Cat(cid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, "Could not retrieve IPFS file")
+	}
 	defer r.Close()
 
-	latestBPM, err := ioutil.ReadAll(r)
+	bytes, err := ioutil.ReadAll(r)
 	if err != nil {
-		log.Fatal("Could not read IPFS object")
+		c.JSON(http.StatusInternalServerError, "Could not process IPFS file")
 	}
-	fmt.Println(string(latestBPM))
+	BPM, err := strconv.Atoi(string(bytes))
+	if err != nil {
+		log.Fatal("Could not parse int")
+	}
 
-	c.JSON(http.StatusOK, Blockchain)
+	c.JSON(http.StatusOK, gin.H{"BPM": BPM})
 }
 
 func handleWriteBlock(c *gin.Context) {
