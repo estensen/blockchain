@@ -3,12 +3,17 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
+	"github.com/ipfs/go-ipfs-api"
 	"github.com/joho/godotenv"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,7 +21,7 @@ import (
 type Block struct {
 	Index     int
 	Timestamp string
-	BPM       int
+	IPFSHash  string
 	PrevHash  string
 	Hash      string
 }
@@ -26,6 +31,8 @@ var Blockchain []Block
 type Message struct {
 	BPM int
 }
+
+var sh *shell.Shell
 
 var mutex = &sync.Mutex{}
 
@@ -37,7 +44,7 @@ func main() {
 
 	go func() {
 		t := time.Now()
-		genesisBlock := Block{0, t.String(), 0, "", ""}
+		genesisBlock := Block{0, t.String(), "", "", ""}
 		spew.Dump(genesisBlock)
 
 		mutex.Lock()
@@ -49,6 +56,13 @@ func main() {
 }
 
 func run() error {
+	sh = shell.NewShell("localhost:5001")
+
+	// Validate that connection is active
+	if _, err := sh.ID(); err != nil {
+		return err
+	}
+
 	r := setupRouter()
 	httpAddr := os.Getenv("ADDR")
 	log.Println("Listening on ", httpAddr)
@@ -64,6 +78,21 @@ func setupRouter() *gin.Engine {
 }
 
 func handleGetBlockchain(c *gin.Context) {
+	path := Blockchain[len(Blockchain)-1].IPFSHash
+	fmt.Println(path)
+	r, err := sh.Cat(path)
+	if err != nil {
+		log.Fatal("Could not retrieve IPFS object")
+	}
+
+	defer r.Close()
+
+	latestBPM, err := ioutil.ReadAll(r)
+	if err != nil {
+		log.Fatal("Could not read IPFS object")
+	}
+	fmt.Println(string(latestBPM))
+
 	c.JSON(http.StatusOK, Blockchain)
 }
 
@@ -73,9 +102,10 @@ func handleWriteBlock(c *gin.Context) {
 
 	mutex.Lock()
 	prevBlock := Blockchain[len(Blockchain)-1]
-	newBlock := generateBlock(prevBlock, msg.BPM)
-
-	if isBlockValid(newBlock, prevBlock) {
+	newBlock, err := generateBlock(prevBlock, msg.BPM)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+	} else if isBlockValid(newBlock, prevBlock) {
 		newBlockchain := append(Blockchain, newBlock)
 		replaceChain(newBlockchain)
 		spew.Dump(Blockchain)
@@ -86,24 +116,30 @@ func handleWriteBlock(c *gin.Context) {
 }
 
 func calculateHash(block Block) string {
-	record := string(block.Index) + block.Timestamp + string(block.BPM) + block.PrevHash
+	record := string(block.Index) + block.Timestamp + string(block.IPFSHash) + block.PrevHash
 	h := sha256.New()
 	h.Write([]byte(record))
 	hashed := h.Sum(nil)
 	return hex.EncodeToString(hashed)
 }
 
-func generateBlock(oldBlock Block, BPM int) Block {
+func generateBlock(oldBlock Block, BPM int) (Block, error) {
 	var newBlock Block
 	t := time.Now()
 
+	var err error
+	s := strconv.Itoa(BPM)
+	newBlock.IPFSHash, err = sh.Add(strings.NewReader(s))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	newBlock.Index = oldBlock.Index + 1
 	newBlock.Timestamp = t.String()
-	newBlock.BPM = BPM
 	newBlock.PrevHash = oldBlock.Hash
 	newBlock.Hash = calculateHash(newBlock)
 
-	return newBlock
+	return newBlock, err
 }
 
 func isBlockValid(newBlock, oldBlock Block) bool {
