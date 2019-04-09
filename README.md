@@ -1,5 +1,5 @@
 # blockchain
-Blockchain storing heart rate
+Blockchain storing heart rate data on IPFS
 
 Requires [IPFS](https://docs.ipfs.io/introduction/install/)
 
