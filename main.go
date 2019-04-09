@@ -84,16 +84,11 @@ func handleGetBlockchain(c *gin.Context) {
 func handleGetBlockData(c *gin.Context) {
 	cid := c.Params.ByName("cid")
 
-	r, err := sh.Cat(cid)
+	bytes, err := fetchObjectFromIPFS(cid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, "Could not retrieve IPFS file")
+		c.JSON(http.StatusInternalServerError, err)
 	}
-	defer r.Close()
 
-	bytes, err := ioutil.ReadAll(r)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, "Could not process IPFS file")
-	}
 	BPM, err := strconv.Atoi(string(bytes))
 	if err != nil {
 		log.Fatal("Could not parse int")
@@ -119,6 +114,21 @@ func handleWriteBlock(c *gin.Context) {
 	mutex.Unlock()
 
 	c.JSON(http.StatusOK, newBlock)
+}
+
+func fetchObjectFromIPFS(cid string) ([]byte, error) {
+	r, err := sh.Cat(cid)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	bytes, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes, nil
 }
 
 func calculateHash(block Block) string {
