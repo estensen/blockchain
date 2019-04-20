@@ -3,9 +3,11 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 	"fmt"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/ssh/terminal"
+	"io"
 	"os"
 	"syscall"
 )
@@ -19,22 +21,25 @@ const salt = "5MieAyX5FLxVHU4CFpMiHyz8v3O//vAyHbP2xQVTwos="
 
 type Cryptor struct {
 	Aead cipher.AEAD
-	Nonce []byte
 }
 
-func (c *Cryptor) Encrypt(plaintext []byte) []byte {
-	return c.Aead.Seal(nil, c.Nonce, plaintext, nil)
+func (c *Cryptor) Encrypt(data []byte) []byte {
+	nonceSize := c.Aead.NonceSize()
+	nonce := make([]byte, nonceSize)
+	io.ReadFull(rand.Reader, nonce)
+	return c.Aead.Seal(nonce, nonce, data, nil)
 }
 
-func (c *Cryptor) Decrypt(ciphertext []byte) ([]byte, error) {
-	return c.Aead.Open(nil, c.Nonce, ciphertext, nil)
+func (c *Cryptor) Decrypt(data []byte) ([]byte, error) {
+	nonceSize := c.Aead.NonceSize()
+	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+	return c.Aead.Open(nil, nonce, ciphertext, nil)
 }
 
 func NewCryptor(passphrase string) (*Cryptor, error) {
 	c := new(Cryptor)
 
 	kdf := argon2.Key([]byte(passphrase), []byte(salt), 3, 32*1024, 4, 44)
-	c.Nonce = kdf[32:]
 
 	block, err := aes.NewCipher(kdf[:32])
 	if err != nil {

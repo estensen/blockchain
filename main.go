@@ -102,17 +102,17 @@ func handleGetBlockchain(c *gin.Context) {
 func handleGetBlockData(c *gin.Context) {
 	cid := c.Params.ByName("cid")
 
-	ciphertext, err := fetchObjectFromIPFS(cid)
+	data, err := fetchObjectFromIPFS(cid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 	}
 
-	plaintextBuf, err := cryptor.Decrypt(ciphertext)
+	plaintext, err := cryptor.Decrypt(data)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 	}
 
-	BPM := binary.BigEndian.Uint32(plaintextBuf)
+	BPM := binary.BigEndian.Uint32(plaintext)
 
 	c.JSON(http.StatusOK, gin.H{"BPM": BPM})
 }
@@ -168,10 +168,10 @@ func generateBlock(oldBlock Block, BPM int) (Block, error) {
 	var err error
 	// TODO: Use variable-length encoding
 	BPMuint := uint32(BPM)
-	plaintextBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(plaintextBuf, BPMuint)
+	data := make([]byte, 4)
+	binary.BigEndian.PutUint32(data, BPMuint)
 
-	ciphertext := cryptor.Encrypt(plaintextBuf)
+	ciphertext := cryptor.Encrypt(data)
 	fmt.Printf("Ciphertext: %x\n", ciphertext)
 
 	newBlock.IPFSHash, err = sh.Add(bytes.NewReader(ciphertext))
