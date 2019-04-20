@@ -2,23 +2,20 @@ package main
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/estensen/blockchain/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/ipfs/go-ipfs-api"
 	"github.com/joho/godotenv"
-	"hash"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -39,18 +36,11 @@ type Message struct {
 
 var sh *shell.Shell
 
-var h hash.Hash
-var aesgcm cipher.AEAD
-var nonce []byte
+var cryptor *crypto.Cryptor
 
 var mutex = &sync.Mutex{}
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	go func() {
 		t := time.Now()
 		genesisBlock := Block{0, t.String(), "", "", ""}
@@ -60,36 +50,30 @@ func main() {
 		Blockchain = append(Blockchain, genesisBlock)
 		mutex.Unlock()
 	}()
+
 	log.Fatal(run())
 }
 
 func run() error {
-	secret := os.Getenv("SECRET")
-	key := []byte(secret)
+	var err error
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		log.Fatal(err)
+	if err := godotenv.Load(); err != nil {
+		return err
 	}
 
-	nonce = make([]byte, 12) // TODO: How large should the nonce be?
-	if false {
-		if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-			log.Fatal(err)
-		}
-	}
-	fmt.Printf("Nonce: %x\n", nonce)
-
-	aesgcm, err = cipher.NewGCM(block)
-	if err != nil {
-		log.Fatalln(err)
+	userPass := os.Getenv("SECRET")
+	if userPass == "" {
+		userPass = crypto.GetEncPass()
 	}
 
-	h = sha256.New()
+	if cryptor, err = crypto.NewCryptor(userPass); err != nil {
+		return err
+	}
+
 	sh = shell.NewShell("localhost:5001")
-
 	// Validate that connection is active
 	if _, err := sh.ID(); err != nil {
+		fmt.Println("You are probably not running the IPFS daemon")
 		return err
 	}
 
@@ -97,6 +81,7 @@ func run() error {
 	httpAddr := os.Getenv("ADDR")
 	log.Println("Listening on ", httpAddr)
 	r.Run("localhost:" + httpAddr)
+
 	return nil
 }
 
@@ -109,23 +94,25 @@ func setupRouter() *gin.Engine {
 }
 
 func handleGetBlockchain(c *gin.Context) {
+	fmt.Println("The entire blockchain")
+	spew.Dump(Blockchain)
 	c.JSON(http.StatusOK, Blockchain)
 }
 
 func handleGetBlockData(c *gin.Context) {
 	cid := c.Params.ByName("cid")
 
-	objBytes, err := fetchObjectFromIPFS(cid)
+	ciphertext, err := fetchObjectFromIPFS(cid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 	}
 
-	plaintext, err := aesgcm.Open(nil, nonce, objBytes, nil)
+	plaintextBuf, err := cryptor.Decrypt(ciphertext)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 	}
 
-	BPM := binary.BigEndian.Uint32(plaintext)
+	BPM := binary.BigEndian.Uint32(plaintextBuf)
 
 	c.JSON(http.StatusOK, gin.H{"BPM": BPM})
 }
@@ -141,6 +128,8 @@ func handleWriteBlock(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err)
 	} else if isBlockValid(newBlock, prevBlock) {
 		newBlockchain := append(Blockchain, newBlock)
+		fmt.Println("The new b")
+		spew.Dump(newBlockchain)
 		replaceChain(newBlockchain)
 		spew.Dump(Blockchain)
 	}
@@ -156,16 +145,17 @@ func fetchObjectFromIPFS(cid string) ([]byte, error) {
 	}
 	defer r.Close()
 
-	bytes, err := ioutil.ReadAll(r)
+	objBytes, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
 
-	return bytes, nil
+	return objBytes, nil
 }
 
 func calculateHash(block Block) string {
-	record := string(block.Index) + block.Timestamp + string(block.IPFSHash) + block.PrevHash
+	record := strconv.Itoa(block.Index) + block.Timestamp + block.IPFSHash + block.PrevHash
+	h := sha256.New()
 	h.Write([]byte(record))
 	hashed := h.Sum(nil)
 	return hex.EncodeToString(hashed)
@@ -176,11 +166,12 @@ func generateBlock(oldBlock Block, BPM int) (Block, error) {
 	t := time.Now()
 
 	var err error
+	// TODO: Use variable-length encoding
 	BPMuint := uint32(BPM)
-	plaintext := make([]byte, 4)
-	binary.BigEndian.PutUint32(plaintext, BPMuint)
+	plaintextBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(plaintextBuf, BPMuint)
 
-	ciphertext := aesgcm.Seal(nil, nonce, plaintext, nil)
+	ciphertext := cryptor.Encrypt(plaintextBuf)
 	fmt.Printf("Ciphertext: %x\n", ciphertext)
 
 	newBlock.IPFSHash, err = sh.Add(bytes.NewReader(ciphertext))
@@ -198,14 +189,17 @@ func generateBlock(oldBlock Block, BPM int) (Block, error) {
 
 func isBlockValid(newBlock, oldBlock Block) bool {
 	if oldBlock.Index+1 != newBlock.Index {
+		fmt.Println("The block number is not incremented by one")
 		return false
 	}
 
 	if oldBlock.Hash != newBlock.PrevHash {
+		fmt.Println("The hash of the previous block is not referenced correctly")
 		return false
 	}
 
 	if calculateHash(newBlock) != newBlock.Hash {
+		fmt.Println("The block hash is not correct")
 		return false
 	}
 

@@ -1,9 +1,15 @@
 # blockchain
 Blockchain storing heart rate data on IPFS
 
-Requires [IPFS](https://docs.ipfs.io/introduction/install/)
+Requires [IPFS](https://docs.ipfs.io/introduction/install/) and [Go](https://golang.org/doc/install)
 
 ## Run
+Start IPFS node
+```sh
+$ ipfs daemon
+```
+
+Start blockchain node
 ```sh
 $ go run main.go
 ```
