@@ -19,6 +19,8 @@ $ go run main.go
 $ curl -d '{"BPM": 50}' -H "Content-Type: application/json" -X POST http://localhost:8081
 ```
 
+Run twice to see that the same data results in different IPFS hashes.
+
 ### Get blockchain
 ```sh
 $ curl http://localhost:8081
@@ -33,7 +35,7 @@ $ curl http://localhost:8081
   {
     "Index": 1,
     "Timestamp": "2019-04-09 17:16:19.93325 +0200 CEST m=+2.601923666",
-    "IPFSHash": "Qmbntg92Ub7HJfz2xB1X9Zttjd5jcUaigRJCkfq4Wkn3wx",
+    "IPFSHash": "QmTGvLDqmnJH2HLKBvJovxznsv1bpUCCR2vxRwXYFdSo4y",
     "PrevHash": "",
     "Hash": "b2bf56b03c2ab09a0bb510f3c0dbdbd3309dc40263e983e48b4c48321891ca32"
   },
@@ -46,8 +48,6 @@ $ curl http://localhost:8081
   }
 ]
 ```
-
-Because the data is still unencrypted you can tell that the last two blocks contain the same BPM
 
 ### Get block data
 ```sh
