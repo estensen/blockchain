@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/estensen/blockchain/crypto"
@@ -42,17 +43,36 @@ var cryptor *crypto.Cryptor
 var mutex = &sync.Mutex{}
 
 func main() {
-	go func() {
-		t := time.Now()
-		genesisBlock := Block{0, t.String(), "", "", ""}
-		spew.Dump(genesisBlock)
+	filename := flag.String("restore", "", "File to restore the blockchain from")
+	flag.Parse()
 
-		mutex.Lock()
-		Blockchain = append(Blockchain, genesisBlock)
-		mutex.Unlock()
-	}()
+	if *filename != "" {
+		loadBlockchain(filename)
+	} else {
+		go func() {
+			t := time.Now()
+			genesisBlock := Block{0, t.String(), "", "", ""}
+			spew.Dump(genesisBlock)
+			mutex.Lock()
+			Blockchain = append(Blockchain, genesisBlock)
+			mutex.Unlock()
+		}()
+	}
 
 	log.Fatal(run())
+}
+
+func loadBlockchain(filename *string) {
+	data, err := ioutil.ReadFile(*filename)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = json.Unmarshal([]byte(data), &Blockchain)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Println("Blockchain loaded from disk")
+	spew.Dump(Blockchain)
 }
 
 func run() error {

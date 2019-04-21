@@ -16,6 +16,11 @@ Start blockchain node
 $ go run main.go
 ```
 
+Or restore blockchain from file
+```sh
+$ go run main.go --restore test_file
+```
+
 ### Add block
 ```sh
 $ curl -d '{"BPM": 50}' -H "Content-Type: application/json" -X POST http://localhost:8081
@@ -55,4 +60,9 @@ $ curl http://localhost:8081
 ```sh
 $ curl http://localhost:8081/block/Qmbntg92Ub7HJfz2xB1X9Zttjd5jcUaigRJCkfq4Wkn3wx
 {"BPM":55}
+```
+
+### Save blockchain to disk
+```sh
+$ curl http://localhost:8081/save/test_file
 ```
