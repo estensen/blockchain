@@ -1,6 +1,8 @@
 # blockchain
 Blockchain storing heart rate data on IPFS
 
+_This is a proof-of-concept implementation. It has not been tested for production._
+
 Requires [IPFS](https://docs.ipfs.io/introduction/install/) and [Go](https://golang.org/doc/install)
 
 ## Run
