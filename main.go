@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/estensen/blockchain/crypto"
@@ -90,14 +91,10 @@ func setupRouter() *gin.Engine {
 	r.GET("/", handleGetBlockchain)
 	r.POST("/", handleWriteBlock)
 	r.GET("/block/:cid", handleGetBlockData)
+	r.GET("/save/:filename", handleSaveBlockchain)
 	return r
 }
 
-func handleGetBlockchain(c *gin.Context) {
-	fmt.Println("The entire blockchain")
-	spew.Dump(Blockchain)
-	c.JSON(http.StatusOK, Blockchain)
-}
 
 func handleGetBlockData(c *gin.Context) {
 	cid := c.Params.ByName("cid")
@@ -136,6 +133,29 @@ func handleWriteBlock(c *gin.Context) {
 	mutex.Unlock()
 
 	c.JSON(http.StatusOK, newBlock)
+}
+
+func handleGetBlockchain(c *gin.Context) {
+	fmt.Println("The entire blockchain")
+	spew.Dump(Blockchain)
+	c.JSON(http.StatusOK, Blockchain)
+}
+
+func handleSaveBlockchain(c *gin.Context) {
+	filename := c.Params.ByName("filename")
+
+	file, err := json.Marshal(Blockchain)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+	}
+
+	err = ioutil.WriteFile(filename, file, 0644)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+	}
+
+	c.JSON(http.StatusOK, "Blockchain saved to disk")
 }
 
 func fetchObjectFromIPFS(cid string) ([]byte, error) {
