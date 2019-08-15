@@ -6,8 +6,9 @@ _This is a proof-of-concept implementation. It has not been tested for productio
 Requires [IPFS](https://docs.ipfs.io/introduction/install/) and [Go](https://golang.org/doc/install)
 
 ## Run
-Start IPFS node
+Init and start IPFS node
 ```sh
+$ ipfs init
 $ ipfs daemon
 ```
 
