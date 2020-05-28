@@ -67,3 +67,6 @@ $ curl http://localhost:8081/block/Qmbntg92Ub7HJfz2xB1X9Zttjd5jcUaigRJCkfq4Wkn3w
 ```sh
 $ curl http://localhost:8081/save/test_file
 ```
+
+## References
+This implementation is based on [this](https://medium.com/@mycoralhealth/code-your-own-blockchain-in-less-than-200-lines-of-go-e296282bcffc) Medium post by Coral Health.
